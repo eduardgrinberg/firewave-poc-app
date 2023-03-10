@@ -103,11 +103,6 @@ public class MainActivity extends AppCompatActivity {
                     ((Button) view).setText("Scan");
                 }
             }.start();
-        } else {
-            isRecording = false;
-            ((Button) view).setText("Scan");
-            txtResult.setText("");
-
         }
     }
 
