@@ -14,8 +14,8 @@ import okhttp3.RequestBody;
 import okhttp3.Response;
 
 public class SoundDetector {
+//    private final String SOUND_DETECTOR_URL = "http://10.0.2.2:5000/upload";
     private final String SOUND_DETECTOR_URL = "http://3.66.152.172:5000/upload";
-    ;
 
     public String detect(byte[] data) throws IOException {
         Log.i(getClass().getName(), "Start Detecting. data.length: " + data.length);
