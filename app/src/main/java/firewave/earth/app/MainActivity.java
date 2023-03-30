@@ -2,12 +2,11 @@ package firewave.earth.app;
 
 import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.constraintlayout.widget.ConstraintLayout;
 import androidx.core.app.ActivityCompat;
-import androidx.core.content.ContextCompat;
 
 import android.Manifest;
 import android.content.pm.PackageManager;
-import android.content.res.ColorStateList;
 import android.graphics.Color;
 import android.os.Bundle;
 import android.os.CountDownTimer;
@@ -16,6 +15,11 @@ import android.view.View;
 import android.widget.Button;
 import android.widget.TextView;
 
+import com.google.android.material.floatingactionbutton.FloatingActionButton;
+
+import org.json.JSONException;
+
+import java.io.IOException;
 import java.util.Objects;
 
 import pl.droidsonroids.gif.GifDrawable;
@@ -23,6 +27,7 @@ import pl.droidsonroids.gif.GifImageView;
 
 public class MainActivity extends AppCompatActivity {
 
+    private final int recDuration = 4000;
     private boolean isRecording = false;
 
     // Requesting permission to RECORD_AUDIO
@@ -30,10 +35,16 @@ public class MainActivity extends AppCompatActivity {
     private boolean permissionToRecordAccepted = false;
     private final String[] permissions = {Manifest.permission.RECORD_AUDIO};
     private Thread recordingThread;
+    private Thread feedbackThread;
     private PCMRecorder pcmRecorder;
     private SoundDetector soundDetector;
     private TextView txtResult;
     private GifImageView gifWave;
+    private FloatingActionButton mYesButton;
+    private FloatingActionButton mNoButton;
+    private ConstraintLayout resultLayout;
+    private UploadResponse uploadResponse = null;
+
 
     @Override
     public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
@@ -51,6 +62,10 @@ public class MainActivity extends AppCompatActivity {
         setContentView(R.layout.activity_main);
         txtResult = (TextView) findViewById(R.id.txtResult);
         gifWave = (GifImageView) findViewById(R.id.gifWave);
+        mYesButton = findViewById(R.id.yes_button);
+        mNoButton = findViewById(R.id.no_button);
+        resultLayout = findViewById(R.id.resultLayout);
+
         ((GifDrawable) gifWave.getDrawable()).stop();
         ActivityCompat.requestPermissions(this, permissions, REQUEST_RECORD_AUDIO_PERMISSION);
 
@@ -64,6 +79,10 @@ public class MainActivity extends AppCompatActivity {
             }
         }, "PCMRecorder Thread");
 
+        feedbackThread = new Thread(() -> {
+
+        });
+
         try {
             pcmRecorder.config(16000, 1, 16);
         } catch (Exception e) {
@@ -75,7 +94,7 @@ public class MainActivity extends AppCompatActivity {
         if (!isRecording) {
             isRecording = true;
             ((GifDrawable) gifWave.getDrawable()).start();
-            txtResult.setText("");
+            hideResult();
             recordingThread = new Thread(() -> {
                 try {
                     recordAndDetect();
@@ -92,7 +111,7 @@ public class MainActivity extends AppCompatActivity {
                 }
             }, "PCMRecorder Thread");
             recordingThread.start();
-            new CountDownTimer(4000, 1000) {
+            new CountDownTimer(recDuration, 1000) {
                 public void onTick(long millisUntilFinished) {
                     ((Button) view).setText(millisUntilFinished / 1000 + 1 + "s");
                 }
@@ -107,29 +126,77 @@ public class MainActivity extends AppCompatActivity {
     private void recordAndDetect() throws Exception {
         Log.i(getClass().getName(), "Started the recording thread");
 
-//        while (isRecording) {
-        byte[] data = pcmRecorder.record(4000);
-        String detect = soundDetector.detect(data);
-        printResult(detect);
-//        }
+        byte[] data = pcmRecorder.record(recDuration);
+        try {
+            uploadResponse = soundDetector.detect(data);
+            showResult(uploadResponse.prediction, 5);
+        } catch (Exception e) {
+            showError(e.getMessage());
+        }
+
 
         Log.i(getClass().getName(), "Stopped the recording thread");
     }
 
-    private void printResult(String detect) {
-        String res = detect == "FIRE_ALARM" ? "ALARM" : "Huh...";
-        if(Objects.equals(detect, "FIRE_ALARM")){
+    private void showResult(Boolean prediction, final int timeout) {
+        resultLayout.post(() -> {
+            setResultText(prediction);
+            resultLayout.setVisibility(View.VISIBLE);
+
+            // Hide buttons after timeout seconds
+            new CountDownTimer(timeout * 1000, 1000) {
+                public void onTick(long millisUntilFinished) {
+                }
+
+                public void onFinish() {
+                    hideResult();
+                }
+            }.start();
+        });
+    }
+
+    private void hideResult() {
+        resultLayout.post(() -> {
+            resultLayout.setVisibility(View.INVISIBLE);
+        });
+    }
+
+    private void setResultText(Boolean prediction) {
+        if (prediction) {
             txtResult.post(() -> {
                 txtResult.setText("ALARM");
                 txtResult.setTextColor(Color.RED);
             });
-        }
-        else {
+        } else {
             txtResult.post(() -> {
                 txtResult.setText("Huh...");
                 txtResult.setTextColor(getResources().getColor(R.color.green_2));
             });
         }
 
+    }
+
+    public void noButtonResultClick(View view) {
+        sendFeedback(!uploadResponse.prediction);
+        hideResult();
+    }
+
+    public void yesButtonResultClick(View view) {
+        sendFeedback(uploadResponse.prediction);
+        hideResult();
+    }
+
+    private void showError(String message) {
+//        Log.e(getClass().getName(), message);
+    }
+
+    public void sendFeedback(boolean correctPrediction) {
+        new Thread(() -> {
+            try {
+                soundDetector.sendFeedback(uploadResponse.fileName, correctPrediction);
+            } catch (Exception e) {
+                showError(e.getMessage());
+            }
+        }).start();
     }
 }

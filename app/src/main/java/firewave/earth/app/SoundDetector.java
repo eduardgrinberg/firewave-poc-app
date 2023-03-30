@@ -3,6 +3,9 @@ package firewave.earth.app;
 
 import android.util.Log;
 
+import org.json.JSONException;
+import org.json.JSONObject;
+
 import java.io.IOException;
 
 import okhttp3.Call;
@@ -14,11 +17,14 @@ import okhttp3.RequestBody;
 import okhttp3.Response;
 
 public class SoundDetector {
-//    private final String SOUND_DETECTOR_URL = "http://10.0.2.2:5000/upload";
-    private final String SOUND_DETECTOR_URL = "http://3.66.152.172:5000/upload";
+//    private final String BASE_URL = "http://10.0.2.2:5000";
+    private final String BASE_URL = "http://3.66.152.172:5000";
+    private UploadResponse uploadResponse = null;
 
-    public String detect(byte[] data) throws IOException {
+    public UploadResponse detect(byte[] data) throws IOException {
         Log.i(getClass().getName(), "Start Detecting. data.length: " + data.length);
+
+        String url = BASE_URL + "/upload";
 
         OkHttpClient client = new OkHttpClient();
 
@@ -29,7 +35,7 @@ public class SoundDetector {
                 .build();
 
         Request request = new Request.Builder()
-                .url(SOUND_DETECTOR_URL)
+                .url(url)
                 .post(requestBody)
                 .build();
 
@@ -38,11 +44,34 @@ public class SoundDetector {
 
         Log.i(getClass().getName(), "Received response. response code: " + response.code());
         if (response.code() == 200) {
-            String res = response.body().string();
-            Log.i(getClass().getName(), "Received response: " + res);
-            return res;
+            uploadResponse = UploadResponse.fromJson(response.body().string());
+            Log.i(getClass().getName(), "Received response: " + uploadResponse.prediction);
+            return uploadResponse;
         } else {
-            return "ERROR";
+            throw new RuntimeException("Error!!!");
         }
+    }
+
+    public void sendFeedback(String fileName, boolean correctPrediction) throws JSONException, IOException {
+        Log.i(getClass().getName(), "Sending feedback for file name: " + fileName + " isSignal: " + correctPrediction);
+
+        String url = BASE_URL + "/feedback";
+
+        OkHttpClient client = new OkHttpClient();
+
+        MediaType mediaType = MediaType.parse("application/json");
+        JSONObject json = new JSONObject();
+        json.put("fileName", fileName);
+        json.put("correctPrediction", correctPrediction);
+        RequestBody body = RequestBody.create(mediaType, json.toString());
+
+        Request request = new Request.Builder()
+                .url(url)
+                .post(body)
+                .build();
+
+        Response response = client.newCall(request).execute();
+
+        Log.i(getClass().getName(), "Received response: " + response.code());
     }
 }
