@@ -28,6 +28,8 @@ import pl.droidsonroids.gif.GifImageView;
 public class MainActivity extends AppCompatActivity {
 
     private final int recDuration = 4000;
+    private final int sampleRate = 44100;
+    private final int bitsPerSample = 16;
     private boolean isRecording = false;
 
     // Requesting permission to RECORD_AUDIO
@@ -84,7 +86,7 @@ public class MainActivity extends AppCompatActivity {
         });
 
         try {
-            pcmRecorder.config(16000, 1, 16);
+            pcmRecorder.config(sampleRate, 1, bitsPerSample);
         } catch (Exception e) {
             Log.e("MainActivity", "Failed to config the Recorder", e);
         }
